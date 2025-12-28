@@ -38,7 +38,7 @@ To run this project locally:
 
 1.  **Clone the repository:**
     ```bash
-    git clone [https://github.com/aysenasahin/Robotic-Surgery-VR-Simulation]
+    git clone [https://github.com/aysenasahin/Cerrahi_Simulsyon]
     ```
 
 2.  **Open in Unity Hub:**
