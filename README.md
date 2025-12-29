@@ -55,6 +55,7 @@ To run this project locally:
 ### 👨🏻‍💻👩‍💻 Authors
 **Ayşe Sena Şahin** - *Electrical-Electronics Engineering Student*
 *Başkent University*
+
 **Yiğit Kemal Yeşiltaş** - *Biomedical Engineering Student*
 *Başkent University*
 
