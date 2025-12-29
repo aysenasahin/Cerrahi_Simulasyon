@@ -207,9 +207,14 @@ public class AletTutucu : MonoBehaviour
         Rigidbody rb = eldekiNesne.GetComponent<Rigidbody>();
         if (rb != null)
         {
-            rb.isKinematic = true;
+            // --- DÜZELTME BURADA ---
+            // Önce mevcut hızları SIFIRLIYORUZ (Henüz kinematic değilken)
             rb.linearVelocity = Vector3.zero;
             rb.angularVelocity = Vector3.zero;
+
+            // EN SON donduruyoruz (Kinematic yapıyoruz)
+            rb.isKinematic = true;
+            // -----------------------
         }
 
         Collider col = eldekiNesne.GetComponent<Collider>();
