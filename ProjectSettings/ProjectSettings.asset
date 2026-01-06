@@ -12,7 +12,7 @@ PlayerSettings:
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
-  companyName: DefaultCompany
+  companyName: Baskent_Universitesi
   productName: Cerrahi_Simulasyon_PC
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}

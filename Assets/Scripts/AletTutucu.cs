@@ -9,7 +9,7 @@ public class AletTutucu : MonoBehaviour
     public Camera anaKamera;
 
     [Header("Mesafe Ayarları")]
-    public float uzanmaMenzili = 2.0f; // İdeal gerçekçi menzil (Yetişemezsen yürü)
+    public float uzanmaMenzili = 2.0f; // İdeal gerçekçi menzil
     public float almaPayi = 0.05f;
     public float birakmaPayi = 0.2f; 
     public float animasyonSuresi = 0.6f;
@@ -138,15 +138,13 @@ public class AletTutucu : MonoBehaviour
 
         eldekiNesne.transform.SetParent(elModeli);
         
-        // --- ÖZEL POZİSYON AYARLAMALARI ---
+        // --- ÖZEL POZİSYON AYARLAMALARI (Metzenbaum Fix) ---
         string isim = eldekiNesne.name.ToLower();
         
-        // "Metzenbaum" ismini özel olarak kontrol ediyoruz
         if (isim.Contains("metzenbaum") || isim.Contains("scissors") || isim.Contains("makas"))
         {
             // 180 derece çevir (Sapı sana gelsin)
             eldekiNesne.transform.localRotation = Quaternion.Euler(0, 180, 0); 
-            // Hafif sola veya sağa kaydırma gerekirse buradaki X (-0.05f) ile oyna
             eldekiNesne.transform.localPosition = new Vector3(-0.05f, 0, 0);
         }
         else
@@ -166,7 +164,7 @@ public class AletTutucu : MonoBehaviour
         yield return StartCoroutine(EliGeriGetir());
     }
 
-    // --- BIRAKMA İŞLEMİ ---
+    // --- BIRAKMA İŞLEMİ (YATAY BIRAKMA) ---
     IEnumerator ElUzanipBiraksin(Vector3 tiklananNokta)
     {
         elHareketEdiyor = true;
@@ -179,6 +177,7 @@ public class AletTutucu : MonoBehaviour
             t += Time.deltaTime / (animasyonSuresi / 2);
             elModeli.position = Vector3.Lerp(baslangicPos, hedefNokta, t);
             
+            // Sadece Y ekseninde dön (Yere bakma, yatay kal)
             Vector3 bakisYonu = tiklananNokta - elModeli.position;
             bakisYonu.y = 0; 
             if (bakisYonu != Vector3.zero)
@@ -216,7 +215,7 @@ public class AletTutucu : MonoBehaviour
         SerbestBirak(true); // Fırlat
     }
 
-    // --- ORTAK BIRAKMA FONKSİYONU (YERE DÜŞME SORUNU ÇÖZÜMÜ) ---
+    // --- ORTAK BIRAKMA VE MOUSE İLE FIRLATMA FONKSİYONU ---
     void SerbestBirak(bool firlatilsinMi)
     {
         if (eldekiNesne == null) return;
@@ -233,13 +232,33 @@ public class AletTutucu : MonoBehaviour
         {
             rb.isKinematic = false;
             
-            // --- YERE DÜŞME SORUNU ÇÖZÜMÜ (CONTINUOUS) ---
-            // Bu satır, aletin hızlı düşerken zeminin içinden geçmesini engeller.
+            // Yere düşerken içinden geçmesin diye Continuous yapıyoruz
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
             if (firlatilsinMi)
             {
-                rb.AddForce(anaKamera.transform.forward * firlatmaGucu, ForceMode.VelocityChange);
+                // MOUSE HEDEFLEME SİSTEMİ
+                // 1. Mouse'un olduğu yere ışın at
+                Ray ray = anaKamera.ScreenPointToRay(Input.mousePosition);
+                RaycastHit hit;
+                Vector3 hedefNokta;
+
+                // 2. Işın bir yere çarptı mı?
+                if (Physics.Raycast(ray, out hit, 100f)) 
+                {
+                    hedefNokta = hit.point;
+                }
+                else
+                {
+                    // Boşluğa bakıyorsak uzakta bir nokta seç
+                    hedefNokta = ray.GetPoint(10f);
+                }
+
+                // 3. O noktaya doğru yön al
+                Vector3 firlatmaYonu = (hedefNokta - eldekiNesne.transform.position).normalized;
+
+                // 4. Hafif yukarı kavis vererek fırlat
+                rb.AddForce((firlatmaYonu * firlatmaGucu) + (Vector3.up * 0.5f), ForceMode.VelocityChange);
             }
         }
         eldekiNesne = null;
