@@ -17,11 +17,18 @@ public class DoktorHareket : MonoBehaviour
     float mouseX_sm = 0f;
     float mouseY_sm = 0f;
 
+    // Eğilme için eklenen değişkenler
+    float kameraOrijinalY;
+    float egilmeMiktari = 0.6f;
+
     CharacterController controller;
 
     void Start()
     {
         controller = GetComponentInParent<CharacterController>();
+
+        // Başlangıç yüksekliğini kaydet
+        kameraOrijinalY = transform.localPosition.y;
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
@@ -56,7 +63,20 @@ public class DoktorHareket : MonoBehaviour
             mouseY_sm = 0f;
         }
 
-        // --- YER ÇEKİMİ
+        // --- C TUŞU İLE EĞİLME KISMI ---
+        float hedefY = kameraOrijinalY;
+
+        if (Input.GetKey(KeyCode.C))
+        {
+            hedefY = kameraOrijinalY - egilmeMiktari;
+        }
+
+        Vector3 yeniPos = transform.localPosition;
+        yeniPos.y = Mathf.Lerp(transform.localPosition.y, hedefY, Time.deltaTime * 10f);
+        transform.localPosition = yeniPos;
+
+
+        // --- YER ÇEKİMİ ---
         if (controller.isGrounded)
             dususHizi = -2f;
         else

@@ -3,325 +3,245 @@ using UnityEngine;
 
 public class AletTutucu : MonoBehaviour
 {
-    [Header("Ayarlar")]
-    public Transform elNoktasi;
-    public LayerMask aletKatmani;
+    [Header("Gerekli Bağlantılar")]
+    public Transform elModeli; // Buraya 'El_Noktasi' atanacak
+    public LayerMask aletKatmani; 
+    public Camera anaKamera;
 
-    // MÜHENDİSLİK STANDARDI: Erişim mesafesi (~2 metre)
-    public float mesafe = 2.0f;
+    [Header("Mesafe Ayarları")]
+    public float uzanmaMenzili = 2.0f; // İdeal gerçekçi menzil (Yetişemezsen yürü)
+    public float almaPayi = 0.05f;
+    public float birakmaPayi = 0.2f; 
+    public float animasyonSuresi = 0.6f;
 
     [Header("Görsel Efektler")]
-    public Material parlamaMateryali; // SARI (Hover/Üzerine gelme)
-    public Material secimMateryali;   // MOR (Seçildi)
+    public Material parlamaMateryali; 
+    public Material secimMateryali;   
 
-    [Header("Eline Alma Animasyonu")]
-    [Tooltip("Aletin ele süzülme süresi (saniye).")]
-    public float eleGelmeSuresi = 1.0f;
+    [Header("Fırlatma (F Tuşu)")]
+    public float firlatmaGucu = 2.5f; 
 
-    [Tooltip("Ele gelirken dönüşün ne kadar takip edeceği (0=hiç dönmez, 1=hedef rotasyona döner).")]
-    [Range(0f, 1f)]
-    public float eleGelmeRotasyonTakibi = 1.0f;
+    public GameObject eldekiNesne; 
+    private GameObject suanBakilanNesne;
+    private Material orijinalMat;
+    private Material bakilanMat;
 
-    [Header("Bırakma / Fırlatma")]
-    [Tooltip("Alet bırakılınca bakış yönüne uygulanacak hız (VelocityChange).")]
-    public float firlatmaHizi = 3.0f;
-
-    [Tooltip("Eğik atış için yukarı doğru ek hız.")]
-    public float yukariHiz = 1.2f;
-
-    [Tooltip("Fırlatma sonrası çarpışmaların stabil olması için opsiyonel ek: Continuous.")]
-    public bool continuousCollisionOnThrow = true;
-
-    // --- DEĞİŞKENLER ---
-    private GameObject eldekiNesne;
-    private GameObject seciliNesne;
-    private GameObject suanBakilanNesne; // Sadece üzerine geldiğimiz (Henüz tıklamadık)
-
-    private Material nesneninOrijinalMateryali;
-    private Material bakilaninOrijinalMateryali; // Sarı yanarken orijinalini saklamak için
-
-    private Camera anaKamera;
-
-    // Eline süzülme sırasında state
-    private bool eleGeliyor = false;
-    private Coroutine eleGelmeCoroutine;
+    private Vector3 elOrijinalLocalPos;
+    private Quaternion elOrijinalLocalRot;
+    private bool elHareketEdiyor = false; 
 
     void Start()
     {
-        anaKamera = Camera.main;
+        if (anaKamera == null) anaKamera = Camera.main;
+
+        if (elModeli != null)
+        {
+            elOrijinalLocalPos = elModeli.localPosition;
+            elOrijinalLocalRot = elModeli.localRotation;
+        }
     }
 
     void Update()
     {
-        // 1. SÜREKLİ TARA (Sarı Parlama İçin)
-        NesneTespitiVeHover();
+        if (elHareketEdiyor) return;
 
-        // 2. TIKLAMA İŞLEMİ
-        if (Input.GetMouseButtonDown(0))
-        {
-            TiklamaIslemleri();
-        }
+        Debug.DrawRay(anaKamera.transform.position, anaKamera.transform.forward * uzanmaMenzili, Color.green);
+        HoverIslemi();
+
+        if (Input.GetMouseButtonDown(0)) SolTikIslemleri();
+        if (Input.GetKeyDown(KeyCode.F)) if (eldekiNesne != null) Firlat();
     }
 
-    Ray MouseIşını()
+    void HoverIslemi()
     {
-        return anaKamera.ScreenPointToRay(Input.mousePosition);
-    }
-
-    // --- SARI PARLAMA (HOVER) SİSTEMİ ---
-    void NesneTespitiVeHover()
-    {
-        // Elim doluyken veya ele gelme animasyonu varken sarı ışık yakma
-        if (eldekiNesne != null || eleGeliyor)
-        {
-            SariParlamayiSondur();
-            return;
-        }
+        if (eldekiNesne != null) { ParlamaSondur(); return; }
 
         RaycastHit hit;
-        if (Physics.Raycast(MouseIşını(), out hit, mesafe, aletKatmani))
+        if (Physics.Raycast(anaKamera.ScreenPointToRay(Input.mousePosition), out hit, uzanmaMenzili, aletKatmani))
         {
-            GameObject tesbitEdilen = hit.collider.gameObject;
+            GameObject obje = hit.collider.gameObject;
+            if (obje == suanBakilanNesne) return;
+            if (obje.GetComponent<Rigidbody>() == null) return; 
 
-            // Eğer zaten MOR yanan (Seçili) nesneye bakıyorsak SARI yakma
-            if (tesbitEdilen == seciliNesne)
+            ParlamaSondur();
+            suanBakilanNesne = obje;
+            Renderer r = suanBakilanNesne.GetComponent<Renderer>();
+            if (r != null)
             {
-                SariParlamayiSondur();
-                return;
-            }
-
-            // Yeni bir nesneye baktık
-            if (tesbitEdilen != suanBakilanNesne)
-            {
-                SariParlamayiSondur(); // Önceki sarıyı söndür
-
-                suanBakilanNesne = tesbitEdilen;
-
-                Renderer ren = suanBakilanNesne.GetComponent<Renderer>();
-                if (ren != null)
-                {
-                    bakilaninOrijinalMateryali = ren.material;
-                    if (parlamaMateryali != null) ren.material = parlamaMateryali; // SARI YAP
-                }
+                bakilanMat = r.material;
+                if (parlamaMateryali != null) r.material = parlamaMateryali;
             }
         }
-        else
-        {
-            // Boşluğa bakıyorsak söndür
-            SariParlamayiSondur();
-        }
+        else ParlamaSondur();
     }
 
-    void SariParlamayiSondur()
+    void ParlamaSondur()
     {
         if (suanBakilanNesne != null)
         {
-            Renderer ren = suanBakilanNesne.GetComponent<Renderer>();
-            if (ren != null && bakilaninOrijinalMateryali != null && suanBakilanNesne != seciliNesne)
-            {
-                ren.material = bakilaninOrijinalMateryali;
-            }
+            Renderer r = suanBakilanNesne.GetComponent<Renderer>();
+            if (r != null && bakilanMat != null) r.material = bakilanMat;
             suanBakilanNesne = null;
         }
     }
 
-    // --- TIKLAMA VE SEÇME SİSTEMİ ---
-    void TiklamaIslemleri()
+    void SolTikIslemleri()
     {
-        // Ele gelme animasyonu varken tıklamaları kilitle (state bozulmasın)
-        if (eleGeliyor) return;
-
         RaycastHit hit;
-        if (Physics.Raycast(MouseIşını(), out hit, mesafe, aletKatmani))
+        if (Physics.Raycast(anaKamera.ScreenPointToRay(Input.mousePosition), out hit, uzanmaMenzili))
         {
-            GameObject vurulanNesne = hit.collider.gameObject;
+            GameObject vurulan = hit.collider.gameObject;
 
-            // SENARYO 1: Elimde zaten bir alet var -> BIRAK (Artık eski yerine ışınlama yok, fırlatma var)
             if (eldekiNesne != null)
             {
-                FirlatBirak();
-
-                // İstersen: bıraktıktan sonra tıkladığın nesneyi seç (mor) yap
-                // Hemen tekrar almayı engellemek için bu satırları kapalı tutmak daha stabil olabilir.
-                SecimiIptalEt();
-                NesneyiSec(vurulanNesne);
+                StartCoroutine(ElUzanipBiraksin(hit.point));
                 return;
             }
 
-            // SENARYO 2: Elim boş
-            if (vurulanNesne == seciliNesne)
+            if (vurulan.GetComponent<Rigidbody>() != null)
             {
-                // Zaten MOR olana tıkladım -> Eline AL (Artık süzülerek gelecek)
-                ElineAl();
-            }
-            else
-            {
-                // Yeni bir şeye tıkladım -> Sadece SEÇ (Mor Yak)
-                SecimiIptalEt();
-                NesneyiSec(vurulanNesne);
+                StartCoroutine(ElUzanipAlsin(vurulan));
             }
         }
-        else
-        {
-            // Boşluğa tıkladım
-            if (eldekiNesne != null) FirlatBirak();
-            else SecimiIptalEt();
-        }
     }
 
-    void NesneyiSec(GameObject nesne)
+    // --- ALMA İŞLEMİ ---
+    IEnumerator ElUzanipAlsin(GameObject hedef)
     {
-        SariParlamayiSondur();
+        elHareketEdiyor = true; 
+        ParlamaSondur();
 
-        seciliNesne = nesne;
-        Renderer ren = seciliNesne.GetComponent<Renderer>();
-        if (ren != null)
-        {
-            if (nesneninOrijinalMateryali == null)
-                nesneninOrijinalMateryali = bakilaninOrijinalMateryali;
-
-            if (nesneninOrijinalMateryali == null)
-                nesneninOrijinalMateryali = ren.material;
-
-            if (secimMateryali != null) ren.material = secimMateryali; // MOR
-        }
-    }
-
-    void ElineAl()
-    {
-        if (seciliNesne == null || elNoktasi == null) return;
-
-        // Mor rengi düzelt
-        if (nesneninOrijinalMateryali != null)
-        {
-            Renderer rr = seciliNesne.GetComponent<Renderer>();
-            if (rr != null) rr.material = nesneninOrijinalMateryali;
-        }
-
-        // State
-        eldekiNesne = seciliNesne;
-        seciliNesne = null;
-        nesneninOrijinalMateryali = null;
-
-        // Fizik: ele gelirken çarpışma/itme olmasın
-        Rigidbody rb = eldekiNesne.GetComponent<Rigidbody>();
-        if (rb != null)
-        {
-            // --- DÜZELTME BURADA ---
-            // Önce mevcut hızları SIFIRLIYORUZ (Henüz kinematic değilken)
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-
-            // EN SON donduruyoruz (Kinematic yapıyoruz)
-            rb.isKinematic = true;
-            // -----------------------
-        }
-
-        Collider col = eldekiNesne.GetComponent<Collider>();
-        if (col != null) col.enabled = false;
-
-        // Eğer daha önce coroutine varsa kapat
-        if (eleGelmeCoroutine != null) StopCoroutine(eleGelmeCoroutine);
-
-        // Süzülerek ele getir
-        eleGelmeCoroutine = StartCoroutine(AletiEleSudzur(eldekiNesne.transform, elNoktasi, eleGelmeSuresi));
-    }
-
-    IEnumerator AletiEleSudzur(Transform alet, Transform hedef, float sure)
-    {
-        eleGeliyor = true;
-
-        // Parent yok; world uzayında süzülme
-        alet.SetParent(null);
-
-        Vector3 basPos = alet.position;
-        Quaternion basRot = alet.rotation;
-
-        Vector3 hedefPos = hedef.position;
-        Quaternion hedefRot = hedef.rotation;
+        Vector3 baslangicPos = elModeli.position;
+        Vector3 aletPos = hedef.transform.position;
+        Vector3 yon = (aletPos - baslangicPos).normalized;
+        Vector3 hedefNokta = aletPos - (yon * almaPayi);
 
         float t = 0f;
         while (t < 1f)
         {
-            t += Time.deltaTime / Mathf.Max(0.0001f, sure);
-
-            // Yumuşak geçiş (ease-in-out)
-            float s = t * t * (3f - 2f * t);
-
-            alet.position = Vector3.Lerp(basPos, hedefPos, s);
-
-            if (eleGelmeRotasyonTakibi > 0f)
-            {
-                Quaternion araRot = Quaternion.Slerp(basRot, hedefRot, s);
-                alet.rotation = Quaternion.Slerp(basRot, araRot, eleGelmeRotasyonTakibi);
-            }
-
+            t += Time.deltaTime / (animasyonSuresi / 2);
+            elModeli.position = Vector3.Lerp(baslangicPos, hedefNokta, t);
+            elModeli.LookAt(aletPos); 
             yield return null;
         }
 
-        // Tam hedefe oturt ve parentla
-        alet.position = hedef.position;
-        alet.rotation = hedef.rotation;
-        alet.SetParent(hedef);
+        eldekiNesne = hedef;
+        Rigidbody rb = eldekiNesne.GetComponent<Rigidbody>();
+        if (rb != null) 
+        { 
+            rb.linearVelocity = Vector3.zero; 
+            rb.angularVelocity = Vector3.zero;
+            rb.isKinematic = true; 
+        }
+        Collider col = eldekiNesne.GetComponent<Collider>();
+        if (col != null) col.enabled = false;
 
-        eleGeliyor = false;
-        eleGelmeCoroutine = null;
+        eldekiNesne.transform.SetParent(elModeli);
+        
+        // --- ÖZEL POZİSYON AYARLAMALARI ---
+        string isim = eldekiNesne.name.ToLower();
+        
+        // "Metzenbaum" ismini özel olarak kontrol ediyoruz
+        if (isim.Contains("metzenbaum") || isim.Contains("scissors") || isim.Contains("makas"))
+        {
+            // 180 derece çevir (Sapı sana gelsin)
+            eldekiNesne.transform.localRotation = Quaternion.Euler(0, 180, 0); 
+            // Hafif sola veya sağa kaydırma gerekirse buradaki X (-0.05f) ile oyna
+            eldekiNesne.transform.localPosition = new Vector3(-0.05f, 0, 0);
+        }
+        else
+        {
+            // Diğerleri (Neşter, Cımbız) düz kalsın
+            eldekiNesne.transform.localPosition = Vector3.zero;
+            eldekiNesne.transform.localRotation = Quaternion.identity;
+        }
+
+        Renderer r = eldekiNesne.GetComponent<Renderer>();
+        if (r != null)
+        {
+            orijinalMat = bakilanMat;
+            if (secimMateryali != null) r.material = secimMateryali;
+        }
+
+        yield return StartCoroutine(EliGeriGetir());
     }
 
-    void FirlatBirak()
+    // --- BIRAKMA İŞLEMİ ---
+    IEnumerator ElUzanipBiraksin(Vector3 tiklananNokta)
+    {
+        elHareketEdiyor = true;
+        Vector3 baslangicPos = elModeli.position;
+        Vector3 hedefNokta = tiklananNokta + (Vector3.up * birakmaPayi);
+
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / (animasyonSuresi / 2);
+            elModeli.position = Vector3.Lerp(baslangicPos, hedefNokta, t);
+            
+            Vector3 bakisYonu = tiklananNokta - elModeli.position;
+            bakisYonu.y = 0; 
+            if (bakisYonu != Vector3.zero)
+            {
+                elModeli.rotation = Quaternion.Slerp(elModeli.rotation, Quaternion.LookRotation(bakisYonu), t);
+            }
+            yield return null;
+        }
+
+        if (eldekiNesne != null)
+        {
+            SerbestBirak(false); // Masaya bırak (Fırlatma yok)
+        }
+
+        yield return StartCoroutine(EliGeriGetir());
+    }
+
+    IEnumerator EliGeriGetir()
+    {
+        float t = 0f;
+        while (t < 1f)
+        {
+            t += Time.deltaTime / (animasyonSuresi / 2);
+            elModeli.localPosition = Vector3.Lerp(elModeli.localPosition, elOrijinalLocalPos, t);
+            elModeli.localRotation = Quaternion.Slerp(elModeli.localRotation, elOrijinalLocalRot, t);
+            yield return null;
+        }
+        elModeli.localPosition = elOrijinalLocalPos;
+        elModeli.localRotation = elOrijinalLocalRot;
+        elHareketEdiyor = false;
+    }
+
+    void Firlat()
+    {
+        SerbestBirak(true); // Fırlat
+    }
+
+    // --- ORTAK BIRAKMA FONKSİYONU (YERE DÜŞME SORUNU ÇÖZÜMÜ) ---
+    void SerbestBirak(bool firlatilsinMi)
     {
         if (eldekiNesne == null) return;
 
-        // Parent'ı çöz
         eldekiNesne.transform.SetParent(null);
+        Renderer r = eldekiNesne.GetComponent<Renderer>();
+        if (r != null && orijinalMat != null) r.material = orijinalMat;
 
-        // Çarpışmayı aç
         Collider col = eldekiNesne.GetComponent<Collider>();
         if (col != null) col.enabled = true;
 
-        // Rigidbody zorunlu: fırlatma için
         Rigidbody rb = eldekiNesne.GetComponent<Rigidbody>();
         if (rb != null)
         {
             rb.isKinematic = false;
+            
+            // --- YERE DÜŞME SORUNU ÇÖZÜMÜ (CONTINUOUS) ---
+            // Bu satır, aletin hızlı düşerken zeminin içinden geçmesini engeller.
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
-            // Daha stabil
-            if (continuousCollisionOnThrow)
-                rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
-
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-
-            // Bakış yönü + yukarı bileşeni (eğik atış)
-            Vector3 yon = Vector3.zero;
-            if (anaKamera != null)
-                yon = anaKamera.transform.forward;
-            else
-                yon = transform.forward;
-
-            // Kısa mesafede “fırlatma”
-            Vector3 hiz = (yon.normalized * firlatmaHizi) + (Vector3.up * yukariHiz);
-
-            // Hızı direkt ver (kısa, kontrollü atış için daha tutarlı)
-            rb.AddForce(hiz, ForceMode.VelocityChange);
-        }
-        // Rigidbody yoksa: fırlatamaz, ama en azından bırakır
-        // (İstersen burada otomatik Rigidbody ekleyebilirsin; genelde editörden eklemek daha doğru.)
-
-        eldekiNesne = null;
-    }
-
-    void SecimiIptalEt()
-    {
-        if (seciliNesne != null)
-        {
-            Renderer ren = seciliNesne.GetComponent<Renderer>();
-            if (ren != null && nesneninOrijinalMateryali != null)
+            if (firlatilsinMi)
             {
-                ren.material = nesneninOrijinalMateryali;
+                rb.AddForce(anaKamera.transform.forward * firlatmaGucu, ForceMode.VelocityChange);
             }
-            seciliNesne = null;
-            nesneninOrijinalMateryali = null;
         }
+        eldekiNesne = null;
     }
 }

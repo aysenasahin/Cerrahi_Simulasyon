@@ -1,2 +1,15 @@
 fileFormatVersion: 2
 guid: 36b6d93979624c64fab8bdeedb57e05f
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - elModeli: {fileID: 8897093224900880590, guid: f25992d94850b3040a251a515fcafa0b, type: 3}
+  - anaKamera: {instanceID: 0}
+  - parlamaMateryali: {fileID: 2100000, guid: f69ccfdd6900259449e30ad8a50e50b0, type: 2}
+  - secimMateryali: {fileID: 2100000, guid: 075942263f7130a469b76d56f43f5bab, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
