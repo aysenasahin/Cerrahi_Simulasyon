@@ -5,30 +5,30 @@ public class AletTutucu : MonoBehaviour
 {
     [Header("Gerekli Bağlantılar")]
     public Transform elModeli; // Buraya 'El_Noktasi' atanacak
-    public LayerMask aletKatmani; 
+    public LayerMask aletKatmani;
     public Camera anaKamera;
 
     [Header("Mesafe Ayarları")]
     public float uzanmaMenzili = 2.0f; // İdeal gerçekçi menzil
     public float almaPayi = 0.05f;
-    public float birakmaPayi = 0.2f; 
+    public float birakmaPayi = 0.2f;
     public float animasyonSuresi = 0.6f;
 
     [Header("Görsel Efektler")]
-    public Material parlamaMateryali; 
-    public Material secimMateryali;   
+    public Material parlamaMateryali;
+    public Material secimMateryali;
 
     [Header("Fırlatma (F Tuşu)")]
-    public float firlatmaGucu = 2.5f; 
+    public float firlatmaGucu = 2.5f;
 
-    public GameObject eldekiNesne; 
+    public GameObject eldekiNesne;
     private GameObject suanBakilanNesne;
     private Material orijinalMat;
     private Material bakilanMat;
 
     private Vector3 elOrijinalLocalPos;
     private Quaternion elOrijinalLocalRot;
-    private bool elHareketEdiyor = false; 
+    private bool elHareketEdiyor = false;
 
     void Start()
     {
@@ -61,7 +61,7 @@ public class AletTutucu : MonoBehaviour
         {
             GameObject obje = hit.collider.gameObject;
             if (obje == suanBakilanNesne) return;
-            if (obje.GetComponent<Rigidbody>() == null) return; 
+            if (obje.GetComponent<Rigidbody>() == null) return;
 
             ParlamaSondur();
             suanBakilanNesne = obje;
@@ -105,10 +105,10 @@ public class AletTutucu : MonoBehaviour
         }
     }
 
-    // --- ALMA İŞLEMİ ---
+    // --- ALMA İŞLEMİ (GÜNCELLENEN KISIM) ---
     IEnumerator ElUzanipAlsin(GameObject hedef)
     {
-        elHareketEdiyor = true; 
+        elHareketEdiyor = true;
         ParlamaSondur();
 
         Vector3 baslangicPos = elModeli.position;
@@ -121,39 +121,59 @@ public class AletTutucu : MonoBehaviour
         {
             t += Time.deltaTime / (animasyonSuresi / 2);
             elModeli.position = Vector3.Lerp(baslangicPos, hedefNokta, t);
-            elModeli.LookAt(aletPos); 
+            elModeli.LookAt(aletPos);
             yield return null;
         }
 
         eldekiNesne = hedef;
+
+        // 1. Önce FİZİĞİ SIFIRLA (Hata almamak için Kinematic yapmadan önce hızları sıfırla)
         Rigidbody rb = eldekiNesne.GetComponent<Rigidbody>();
-        if (rb != null) 
-        { 
-            rb.linearVelocity = Vector3.zero; 
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;  // Unity 6 (Eski sürümse .velocity yap)
             rb.angularVelocity = Vector3.zero;
-            rb.isKinematic = true; 
+            rb.isKinematic = true;             // En son kinematic yap
         }
+
         Collider col = eldekiNesne.GetComponent<Collider>();
         if (col != null) col.enabled = false;
 
+        // 2. PARENTING
         eldekiNesne.transform.SetParent(elModeli);
-        
-        // --- ÖZEL POZİSYON AYARLAMALARI (Metzenbaum Fix) ---
+
+        // --- İSME GÖRE ÖZEL POZİSYON VE ROTASYON AYARLARI ---
         string isim = eldekiNesne.name.ToLower();
-        
-        if (isim.Contains("metzenbaum") || isim.Contains("scissors") || isim.Contains("makas"))
+        Debug.Log("ELİNE ALDIĞIN: " + isim); 
+
+        // Metzenbaum Makası için özel ayar
+        if (isim.Contains("metzenbaum"))
         {
-            // 180 derece çevir (Sapı sana gelsin)
-            eldekiNesne.transform.localRotation = Quaternion.Euler(0, 180, 0); 
-            eldekiNesne.transform.localPosition = new Vector3(-0.05f, 0, 0);
+            // İSTEK: Pos(0, 0, 0.3) | Rot(-10, 0, 90)
+            eldekiNesne.transform.localPosition = new Vector3(0f, 0f, 0.3f);
+            eldekiNesne.transform.localRotation = Quaternion.Euler(-10f, 0f, 90f);
         }
+        // Surgical Scissors için özel ayar
+        else if (isim.Contains("surgical") && isim.Contains("scissors"))
+        {
+            // İSTEK: Pos(0, 0, 0.1) | Rot(0, 0, 0)
+            eldekiNesne.transform.localPosition = new Vector3(0f, 0f, 0.1f);
+            eldekiNesne.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
+        }
+        // Diğer makas türleri için genel fallback (Gerekirse)
+        else if (isim.Contains("scissors") || isim.Contains("makas"))
+        {
+            eldekiNesne.transform.localPosition = new Vector3(0, 0, -0.1f);
+            eldekiNesne.transform.localRotation = Quaternion.Euler(0, 180, 0);
+        }
+        // Tanımsız diğer tüm nesneler
         else
         {
-            // Diğerleri (Neşter, Cımbız) düz kalsın
             eldekiNesne.transform.localPosition = Vector3.zero;
             eldekiNesne.transform.localRotation = Quaternion.identity;
         }
 
+        // Seçim materyali atama
         Renderer r = eldekiNesne.GetComponent<Renderer>();
         if (r != null)
         {
@@ -164,7 +184,7 @@ public class AletTutucu : MonoBehaviour
         yield return StartCoroutine(EliGeriGetir());
     }
 
-    // --- BIRAKMA İŞLEMİ (YATAY BIRAKMA) ---
+    // --- BIRAKMA İŞLEMİ ---
     IEnumerator ElUzanipBiraksin(Vector3 tiklananNokta)
     {
         elHareketEdiyor = true;
@@ -176,10 +196,9 @@ public class AletTutucu : MonoBehaviour
         {
             t += Time.deltaTime / (animasyonSuresi / 2);
             elModeli.position = Vector3.Lerp(baslangicPos, hedefNokta, t);
-            
-            // Sadece Y ekseninde dön (Yere bakma, yatay kal)
+
             Vector3 bakisYonu = tiklananNokta - elModeli.position;
-            bakisYonu.y = 0; 
+            bakisYonu.y = 0;
             if (bakisYonu != Vector3.zero)
             {
                 elModeli.rotation = Quaternion.Slerp(elModeli.rotation, Quaternion.LookRotation(bakisYonu), t);
@@ -189,7 +208,7 @@ public class AletTutucu : MonoBehaviour
 
         if (eldekiNesne != null)
         {
-            SerbestBirak(false); // Masaya bırak (Fırlatma yok)
+            SerbestBirak(false);
         }
 
         yield return StartCoroutine(EliGeriGetir());
@@ -212,10 +231,9 @@ public class AletTutucu : MonoBehaviour
 
     void Firlat()
     {
-        SerbestBirak(true); // Fırlat
+        SerbestBirak(true);
     }
 
-    // --- ORTAK BIRAKMA VE MOUSE İLE FIRLATMA FONKSİYONU ---
     void SerbestBirak(bool firlatilsinMi)
     {
         if (eldekiNesne == null) return;
@@ -231,34 +249,22 @@ public class AletTutucu : MonoBehaviour
         if (rb != null)
         {
             rb.isKinematic = false;
-            
-            // Yere düşerken içinden geçmesin diye Continuous yapıyoruz
             rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
             if (firlatilsinMi)
             {
-                // MOUSE HEDEFLEME SİSTEMİ
-                // 1. Mouse'un olduğu yere ışın at
                 Ray ray = anaKamera.ScreenPointToRay(Input.mousePosition);
                 RaycastHit hit;
                 Vector3 hedefNokta;
 
-                // 2. Işın bir yere çarptı mı?
-                if (Physics.Raycast(ray, out hit, 100f)) 
-                {
+                if (Physics.Raycast(ray, out hit, 100f))
                     hedefNokta = hit.point;
-                }
                 else
-                {
-                    // Boşluğa bakıyorsak uzakta bir nokta seç
                     hedefNokta = ray.GetPoint(10f);
-                }
 
-                // 3. O noktaya doğru yön al
                 Vector3 firlatmaYonu = (hedefNokta - eldekiNesne.transform.position).normalized;
-
-                // 4. Hafif yukarı kavis vererek fırlat
-                rb.AddForce((firlatmaYonu * firlatmaGucu) + (Vector3.up * 0.5f), ForceMode.VelocityChange);
+                // Unity 6 için linearVelocity, eskiyse velocity kullan
+                rb.linearVelocity += (firlatmaYonu * firlatmaGucu) + (Vector3.up * 0.5f);
             }
         }
         eldekiNesne = null;
